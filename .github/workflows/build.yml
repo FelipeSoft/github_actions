@@ -1,62 +1,41 @@
-name: Build Go Application (Windows)
+name: Build and Deploy Go Application
 
 on:
   push:
     branches: [ "production" ]
-  pull_request:
-    branches: [ "production" ]
+  workflow_dispatch:
 
 env:
   GO_VERSION: '1.23.4'
-  PROJECT_NAME: 'github_actions'
-  BUILD_OUTPUT: 'bin'
-  EXCLUDE_PATTERNS: '*.md,*.txt,testdata,temp,config.dev.*,out'
+  PROJECT_NAME: 'http'
+  BUILD_OUTPUT: 'out'
+  EXECUTABLE_NAME: 'http.exe'
 
 jobs:
   build:
-    name: Build on Windows
     runs-on: windows-latest
-    defaults:
-      run:
-        shell: pwsh
-
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+    - uses: actions/checkout@v4
 
-    - name: Setup Go ${{ env.GO_VERSION }}
+    - name: Set up Go
       uses: actions/setup-go@v4
       with:
         go-version: ${{ env.GO_VERSION }}
-        check-latest: true
 
-    - name: Show Go version
-      run: go version
-
-    - name: Clean and exclude files
+    - name: Clean and prepare output directory
       run: |
-        if (Test-Path out) {
-          Remove-Item -Recurse -Force out
-          Write-Output "Removed: /out directory"
+        if (Test-Path $env:BUILD_OUTPUT) {
+          Remove-Item -Recurse -Force $env:BUILD_OUTPUT
         }
-
-    - name: Get dependencies
-      run: go mod download
+        New-Item -ItemType Directory -Path $env:BUILD_OUTPUT | Out-Null
 
     - name: Build application
       run: |
-        if (-not (Test-Path $env:BUILD_OUTPUT)) {
-          New-Item -ItemType Directory -Path $env:BUILD_OUTPUT | Out-Null
-        }
-        
         $ldflags = "-s -w -X main.version=$env:GITHUB_SHA"
-        go build -ldflags "$ldflags" -o "$env:BUILD_OUTPUT/$env:PROJECT_NAME.exe" ./cmd/main.go
-
-    - name: Run tests (opcional)
-      run: go test -v ./...
+        go build -ldflags "$ldflags" -o "$env:BUILD_OUTPUT/$env:EXECUTABLE_NAME" ./cmd/main.go
 
     - name: Upload artifact
       uses: actions/upload-artifact@v4
       with:
-        name: ${{ env.PROJECT_NAME }}-windows
-        path: ${{ env.BUILD_OUTPUT }}/${{ env.PROJECT_NAME }}.exe
+        name: deployment-package
+        path: ${{ env.BUILD_OUTPUT }}/${{ env.EXECUTABLE_NAME }}
